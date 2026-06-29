@@ -16,3 +16,17 @@ terraform/crash.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Sensitive variables
+*.tfvars
+*.tfvars.json
