@@ -1,6 +1,6 @@
 # ==============================================================
 # Jerney Blog Platform - Kubernetes Manifest (Single File)
-# Includes: Namespace, Secrets, PVC (EBS), DB, Backend, Frontend
+# Includes: Namespace, Secrets, PVC (GCP PD), DB, Backend, Frontend
 # ==============================================================
 
 # ---- Namespace ----
@@ -13,12 +13,6 @@ metadata:
 
 ---
 # ---- Database Secret ----
-# In production, use External Secrets Operator or Sealed Secrets.
-# This is base64 encoded for demo purposes.
-# echo -n 'jerney_user' | base64 → amVybmV5X3VzZXI=
-# echo -n 'jerney_pass_2026' | base64 → amVybmV5X3Bhc3NfMjAyNg==
-# echo -n 'jerney_db' | base64 → amVybmV5X2Ri
-
 apiVersion: v1
 kind: Secret
 metadata:
@@ -33,21 +27,20 @@ data:
   POSTGRES_DB: amVybmV5X2Ri
 
 ---
-# ---- EBS StorageClass (gp3) ----
+# ---- GCP Compute Engine Persistent Disk StorageClass ----
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: jerney-ebs-sc
-provisioner: ebs.csi.eks.amazonaws.com
+  name: jerney-gcp-sc
+provisioner: pd.csi.storage.gke.io
 parameters:
-  type: gp3
-  encrypted: "true"
+  type: pd-balanced      # Cost-effective, solid performance SSD-alternative on GCP
 reclaimPolicy: Retain
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 
 ---
-# ---- PersistentVolumeClaim for PostgreSQL (EBS) ----
+# ---- PersistentVolumeClaim for PostgreSQL (GCP PD) ----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -59,7 +52,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: jerney-ebs-sc
+  storageClassName: jerney-gcp-sc
   resources:
     requests:
       storage: 10Gi
@@ -78,7 +71,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate # Required for RWO volumes
+    type: Recreate 
   selector:
     matchLabels:
       app.kubernetes.io/name: jerney-db
@@ -89,12 +82,7 @@ spec:
         app.kubernetes.io/part-of: jerney
         app.kubernetes.io/component: database
     spec:
-      # Security: don't automount service account token (DB doesn't need K8s API)
       automountServiceAccountToken: false
-      tolerations:
-        - key: "karpenter.sh/disrupted"
-          operator: "Exists"
-          effect: "NoSchedule"
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -115,11 +103,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-          # Security context
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false # Postgres needs write access
-            runAsNonRoot: false            # Postgres image runs initdb as root then drops
+            readOnlyRootFilesystem: false 
+            runAsNonRoot: false            
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "jerney_user", "-d", "jerney_db"]
@@ -181,10 +168,6 @@ spec:
         app.kubernetes.io/component: backend
     spec:
       automountServiceAccountToken: false
-      tolerations:
-        - key: "karpenter.sh/disrupted"
-          operator: "Exists"
-          effect: "NoSchedule"
       initContainers:
         - name: wait-for-db
           image: busybox:1.36
@@ -233,7 +216,6 @@ spec:
             limits:
               cpu: 300m
               memory: 256Mi
-          # Security context
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -301,10 +283,6 @@ spec:
         app.kubernetes.io/component: frontend
     spec:
       automountServiceAccountToken: false
-      tolerations:
-        - key: "karpenter.sh/disrupted"
-          operator: "Exists"
-          effect: "NoSchedule"
       containers:
         - name: frontend
           image: ghcr.io/gowthamk4/jerney/jerney-frontend:75da1da
@@ -320,9 +298,9 @@ spec:
               memory: 128Mi
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false # Nginx needs write for cache/pid
+            readOnlyRootFilesystem: false 
             runAsNonRoot: true
-            runAsUser: 101 # nginx user UID in alpine
+            runAsUser: 101 
             capabilities:
               drop:
                 - ALL
@@ -340,10 +318,7 @@ spec:
             periodSeconds: 5
 
 ---
-# ---- Frontend Service (NodePort — for access via port-forward or node IP) ----
-# NOTE: Changed from LoadBalancer because this AWS account does not support
-# creating load balancers. Use `kubectl port-forward svc/jerney-frontend 8080:80 -n jerney`
-# to access the frontend locally.
+# ---- Frontend Service (NodePort) ----
 apiVersion: v1
 kind: Service
 metadata:
@@ -405,4 +380,3 @@ spec:
       ports:
         - port: 5000
           protocol: TCP
-          
