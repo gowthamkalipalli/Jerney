@@ -1,6 +1,6 @@
 # ==============================================================
 # Jerney Blog Platform - Kubernetes Manifest (Single File)
-# Includes: Namespace, Secrets, PVC (GCP PD), DB, Backend, Frontend
+# Includes: Namespace, Secrets, Local Storage, DB, Backend, Frontend
 # ==============================================================
 
 # ---- Namespace ----
@@ -22,7 +22,7 @@ metadata:
     app.kubernetes.io/part-of: jerney
 type: kubernetes.io/dockercfg
 data:
-  .dockercfg: eyJodWIuZG9ja2VyLmNvbSI6eyJhdXRoIjoiYjNObGNuWmxjaTlqYkhWdmRXNTA6YzNKMllXeHZZMmx1YzNKNSJ9fQ==
+  .dockercfg: eyJodWIuZG9ja2VyLmNvbSI6eyJhdXRoIjoiYjNObGNuWmxjaTlqYkhWdmRXNTA6YzNKMllXeHZZMmx1YzNKNSIsImVtYWlsIjoiIn19
 
 ---
 # ---- Database Secret ----
@@ -40,20 +40,45 @@ data:
   POSTGRES_DB: amVybmV5X2Ri
 
 ---
-# ---- GCP Compute Engine Persistent Disk StorageClass ----
+# ---- Local Storage StorageClass (Compatible with all K8s clusters) ----
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: jerney-gcp-sc
-provisioner: pd.csi.storage.gke.io
-parameters:
-  type: pd-balanced      # Cost-effective, solid performance SSD-alternative on GCP
-reclaimPolicy: Retain
+  name: jerney-local-sc
+provisioner: kubernetes.io/no-provisioner
 volumeBindingMode: WaitForFirstConsumer
-allowVolumeExpansion: true
+reclaimPolicy: Delete
+allowVolumeExpansion: false
 
 ---
-# ---- PersistentVolumeClaim for PostgreSQL (GCP PD) ----
+# ---- PersistentVolume for PostgreSQL (Local Storage) ----
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jerney-db-pv
+  labels:
+    app.kubernetes.io/part-of: jerney
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: jerney-local-sc
+  local:
+    path: /mnt/data/jerney-db
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - docker-desktop
+                - minikube
+                - localhost
+
+---
+# ---- PersistentVolumeClaim for PostgreSQL (Local Storage) ----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -65,7 +90,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: jerney-gcp-sc
+  storageClassName: jerney-local-sc
   resources:
     requests:
       storage: 10Gi
@@ -111,11 +136,11 @@ spec:
               subPath: pgdata
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 300m
+              cpu: 250m
               memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false 
@@ -169,7 +194,7 @@ metadata:
     app.kubernetes.io/part-of: jerney
     app.kubernetes.io/component: backend
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: jerney-backend
@@ -226,11 +251,11 @@ spec:
                   key: POSTGRES_DB
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
+              cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -286,7 +311,7 @@ metadata:
     app.kubernetes.io/part-of: jerney
     app.kubernetes.io/component: frontend
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: jerney-frontend
