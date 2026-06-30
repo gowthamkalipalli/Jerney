@@ -185,7 +185,7 @@ spec:
               echo "DB is ready!"
       containers:
         - name: backend
-          image: ghcr.io/gowthamk4/jerney/jerney-backend:75da1da
+          image: ghcr.io/gowthamkalipalli/jerney/jerney-backend:75da1da
           ports:
             - containerPort: 5000
               protocol: TCP
@@ -289,7 +289,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend
-          image: ghcr.io/gowthamk4/jerney/jerney-frontend:75da1da
+          image: ghcr.io/gowthamkalipalli/jerney/jerney-frontend:75da1da
           ports:
             - containerPort: 8080
               protocol: TCP
