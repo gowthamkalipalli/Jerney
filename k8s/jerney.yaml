@@ -12,6 +12,19 @@ metadata:
     app.kubernetes.io/part-of: jerney
 
 ---
+# ---- Docker Hub Registry Secret ----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dockerhub-secret
+  namespace: jerney
+  labels:
+    app.kubernetes.io/part-of: jerney
+type: kubernetes.io/dockercfg
+data:
+  .dockercfg: eyJodWIuZG9ja2VyLmNvbSI6eyJhdXRoIjoiYjNObGNuWmxjaTlqYkhWdmRXNTA6YzNKMllXeHZZMmx1YzNKNSJ9fQ==
+
+---
 # ---- Database Secret ----
 apiVersion: v1
 kind: Secret
@@ -169,7 +182,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       imagePullSecrets:
-        - name: ghcr-secret
+        - name: dockerhub-secret
       initContainers:
         - name: wait-for-db
           image: busybox:1.36
@@ -185,7 +198,7 @@ spec:
               echo "DB is ready!"
       containers:
         - name: backend
-          image: ghcr.io/gowthamkalipalli/jerney/jerney-backend:75da1da
+          image: gowthamk4/jerney-backend:75da1da
           ports:
             - containerPort: 5000
               protocol: TCP
@@ -286,10 +299,10 @@ spec:
     spec:
       automountServiceAccountToken: false
       imagePullSecrets:
-        - name: ghcr-secret
+        - name: dockerhub-secret
       containers:
         - name: frontend
-          image: ghcr.io/gowthamkalipalli/jerney/jerney-frontend:75da1da
+          image: gowthamk4/jerney-frontend:75da1da
           ports:
             - containerPort: 8080
               protocol: TCP
