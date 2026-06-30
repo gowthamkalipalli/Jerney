@@ -168,6 +168,8 @@ spec:
         app.kubernetes.io/component: backend
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-secret
       initContainers:
         - name: wait-for-db
           image: busybox:1.36
@@ -283,6 +285,8 @@ spec:
         app.kubernetes.io/component: frontend
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: frontend
           image: ghcr.io/gowthamk4/jerney/jerney-frontend:75da1da
