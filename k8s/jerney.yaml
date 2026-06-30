@@ -69,7 +69,7 @@ spec:
   storageClassName: jerney-gcp-sc-v2
   resources:
     requests:
-      storage: 10Gi
+      storage: 200Gi
 
 ---
 # ---- PostgreSQL Deployment ----
