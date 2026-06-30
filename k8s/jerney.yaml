@@ -1,6 +1,6 @@
 # ==============================================================
 # Jerney Blog Platform - Kubernetes Manifest (Single File)
-# Includes: Namespace, Secrets, Local Storage, DB, Backend, Frontend
+# Includes: Namespace, Secrets, GCP PD, DB, Backend, Frontend
 # ==============================================================
 
 # ---- Namespace ----
@@ -40,45 +40,21 @@ data:
   POSTGRES_DB: amVybmV5X2Ri
 
 ---
-# ---- Local Storage StorageClass (Compatible with all K8s clusters) ----
+# ---- GCP Persistent Disk StorageClass (GKE Autopilot Compatible) ----
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: jerney-local-sc
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
+  name: jerney-gcp-sc
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-standard
+  replication-type: regional-pd
 reclaimPolicy: Delete
-allowVolumeExpansion: false
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
 
 ---
-# ---- PersistentVolume for PostgreSQL (Local Storage) ----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: jerney-db-pv
-  labels:
-    app.kubernetes.io/part-of: jerney
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: jerney-local-sc
-  local:
-    path: /mnt/data/jerney-db
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - docker-desktop
-                - minikube
-                - localhost
-
----
-# ---- PersistentVolumeClaim for PostgreSQL (Local Storage) ----
+# ---- PersistentVolumeClaim for PostgreSQL (GCP PD) ----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -90,7 +66,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: jerney-local-sc
+  storageClassName: jerney-gcp-sc
   resources:
     requests:
       storage: 10Gi
@@ -221,6 +197,10 @@ spec:
                 sleep 3
               done
               echo "DB is ready!"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
       containers:
         - name: backend
           image: gowthamk4/jerney-backend:75da1da
