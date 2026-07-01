@@ -51,7 +51,7 @@ resource "google_compute_global_forwarding_rule" "lb_forwarding_rule" {
 
 resource "google_compute_firewall" "allow_lb_health_checks" {
   name    = "allow-lb-health-checks"
-  network = "YOUR_EXISTING_VPC_NAME" # Specify your running network
+  network = "jerney-gke-vpc" # Specify your running network
 
   allow {
     protocol = "tcp"
