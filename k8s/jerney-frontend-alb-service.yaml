@@ -1,0 +1,96 @@
+# Kubernetes ClusterIP Service for GCP ALB
+# This service enables ALB to discover and route traffic to frontend pods
+# Deploy this BEFORE creating ALB in Terraform
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jerney-frontend-alb
+  namespace: jerney
+  labels:
+    app.kubernetes.io/name: jerney-frontend
+    app.kubernetes.io/part-of: jerney
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/managed-by: terraform
+  annotations:
+    # Enable NEG (Network Endpoint Group) for ALB discovery
+    cloud.google.com/neg: '{"ingress": true}'
+    # Link to backend config for health checks and session affinity
+    cloud.google.com/backend-config: '{"ports": {"80":"jerney-backend-config"}}'
+    # Prevent accidental deletion
+    resource.kubernetes.io/deletion-protection: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: jerney-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# BackendConfig for ALB health checks and advanced features
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: jerney-backend-config
+  namespace: jerney
+spec:
+  # Health check configuration
+  healthChecks:
+    - name: jerney-alb-health-check
+  
+  # Session affinity for sticky sessions
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 3600
+  
+  # Custom headers for requests
+  customRequestHeaders:
+    headers:
+      - "X-Forwarded-Proto:https"
+      - "X-Forwarded-For:{client_region}"
+  
+  # CORS configuration (optional)
+  # cors:
+  #   allowOrigins:
+  #     - "https://example.com"
+  #   allowMethods:
+  #     - "GET"
+  #     - "POST"
+  #   allowHeaders:
+  #     - "Content-Type"
+  
+  # Connection draining timeout
+  timeoutSec: 30
+  
+  # Logging configuration
+  logging:
+    enable: true
+    sampleRate: 1.0
+
+---
+# Health Check resource (referenced by BackendConfig)
+# This is used by ALB to determine if pods are healthy
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeHealthCheck
+metadata:
+  name: jerney-alb-health-check
+  namespace: jerney
+spec:
+  description: "Health check for Jerney ALB"
+  checkIntervalSec: 10
+  timeoutSec: 5
+  healthyThreshold: 2
+  unhealthyThreshold: 3
+  
+  # HTTP health check configuration
+  httpHealthCheck:
+    port: 8080
+    requestPath: "/"
+    proxyHeader: "NONE"
